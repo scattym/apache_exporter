@@ -583,7 +583,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 			MetaList []Meta `xml:"meta"`
 		}
 		type Smil struct {
-			Head Head `xml:"head""`
+			Head Head `xml:"head"`
 		}
 		req, err := http.NewRequest("GET", "http://localhost/example_state.xml", nil)
 		if e.hostOverride != "" {
