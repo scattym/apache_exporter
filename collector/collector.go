@@ -29,6 +29,7 @@ const (
 
 type Exporter struct {
 	URI          string
+	UspScrapeURI string
 	hostOverride string
 	mutex        sync.Mutex
 	client       *http.Client
@@ -62,6 +63,7 @@ type Exporter struct {
 
 type Config struct {
 	ScrapeURI    string
+	UspScrapeURI string
 	HostOverride string
 	Insecure     bool
 }
@@ -69,6 +71,7 @@ type Config struct {
 func NewExporter(logger log.Logger, config *Config) *Exporter {
 	return &Exporter{
 		URI:          config.ScrapeURI,
+		UspScrapeURI: config.UspScrapeURI,
 		hostOverride: config.HostOverride,
 		logger:       logger,
 		up: prometheus.NewDesc(
@@ -585,7 +588,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		type Smil struct {
 			Head Head `xml:"head"`
 		}
-		req, err := http.NewRequest("GET", "http://localhost/example_state.xml", nil)
+		req, err := http.NewRequest("GET", e.UspScrapeURI, nil)
 		if e.hostOverride != "" {
 			req.Host = e.hostOverride
 		}
