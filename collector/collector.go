@@ -9,12 +9,14 @@ package collector
 
 import (
 	"crypto/tls"
+	"encoding/xml"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
@@ -52,7 +54,10 @@ type Exporter struct {
 	proxyBalancerBusy     *prometheus.GaugeVec
 	proxyBalancerReqSize  *prometheus.Desc
 	proxyBalancerRespSize *prometheus.Desc
-	logger                log.Logger
+	lastUpdated           *prometheus.Desc
+	channelStarted        *prometheus.Desc
+
+	logger log.Logger
 }
 
 type Config struct {
@@ -110,6 +115,16 @@ func NewExporter(logger log.Logger, config *Config) *Exporter {
 		kBytesTotal: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "sent_kilobytes_total"),
 			"Current total kbytes sent (*)",
+			nil,
+			nil),
+		lastUpdated: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "last_updated"),
+			"Last time stream store was updated",
+			nil,
+			nil),
+		channelStarted: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "channel_started"),
+			"State of the channel. 1 means started.",
 			nil,
 			nil),
 		durationTotal: prometheus.NewDesc(
@@ -207,6 +222,8 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	e.load.Describe(ch)
 	ch <- e.accessesTotal
 	ch <- e.kBytesTotal
+	ch <- e.lastUpdated
+	ch <- e.channelStarted
 	ch <- e.durationTotal
 	ch <- e.cpuTotal
 	e.cpuload.Describe(ch)
@@ -556,6 +573,71 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 
 	e.proxyBalancerStatus.Collect(ch)
 	e.proxyBalancerBusy.Collect(ch)
+
+	{
+		type Meta struct {
+			Name    string `xml:"name,attr"`
+			Content string `xml:"content,attr"`
+		}
+		type Head struct {
+			MetaList []Meta `xml:"meta"`
+		}
+		type Smil struct {
+			Head Head `xml:"head""`
+		}
+		req, err := http.NewRequest("GET", "http://localhost/example_state.xml", nil)
+		if e.hostOverride != "" {
+			req.Host = e.hostOverride
+		}
+		if err != nil {
+			return fmt.Errorf("error building scraping request: %v", err)
+		}
+		resp, err := e.client.Do(req)
+		if err != nil {
+			//ch <- prometheus.MustNewConstMetric(e.up, prometheus.GaugeValue, 0)
+			return fmt.Errorf("error scraping apache: %v", err)
+		}
+		//ch <- prometheus.MustNewConstMetric(e.up, prometheus.GaugeValue, 1)
+
+		data, err := ioutil.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != 200 {
+			if err != nil {
+				data = []byte(err.Error())
+			}
+			return fmt.Errorf("status %s (%d): %s", resp.Status, resp.StatusCode, data)
+		}
+		var smil Smil
+		xmlErr := xml.Unmarshal([]byte(data), &smil)
+		if xmlErr != nil {
+			fmt.Printf("error: %v", xmlErr)
+			return nil
+		}
+		for _, metaItem := range smil.Head.MetaList {
+			fmt.Printf("application ID:: %q\n", smil.Head.MetaList[0].Name)
+			fmt.Printf("application name:: %q\n", smil.Head.MetaList[0].Content)
+
+			if metaItem.Name == "updated" {
+				timeT, err := time.Parse("2006-01-02T15:04:05.000000Z", smil.Head.MetaList[0].Content)
+				if err != nil {
+					level.Error(e.logger).Log("msg", "Unable parse date:", "err", err)
+					ch <- prometheus.MustNewConstMetric(e.lastUpdated, prometheus.CounterValue, 0)
+				} else {
+					fmt.Println(timeT)
+					ch <- prometheus.MustNewConstMetric(e.lastUpdated, prometheus.CounterValue, float64(timeT.Unix()))
+				}
+			}
+			if metaItem.Name == "state" {
+				if metaItem.Content == "started" {
+					level.Error(e.logger).Log("msg", "started:", "err", err)
+					ch <- prometheus.MustNewConstMetric(e.channelStarted, prometheus.GaugeValue, 1)
+				} else {
+					level.Error(e.logger).Log("msg", "notstarted:", "err", err)
+					ch <- prometheus.MustNewConstMetric(e.channelStarted, prometheus.GaugeValue, 0)
+				}
+			}
+		}
+	}
 
 	return nil
 }
