@@ -1,4 +1,12 @@
 
+Forked from https://github.com/Lusitaniae/apache_exporter
+
+Functionality added to query stats from the unified streaming origin statistics page (https://www.unified-streaming.com/)
+
+Work in progress. Just a POC for the moment.
+
+
+
 # Apache Exporter for Prometheus [![Build Status][buildstatus]][circleci]
 
 [![GitHub release](https://img.shields.io/github/release/Lusitaniae/apache_exporter.svg)][release]
