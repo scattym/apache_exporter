@@ -136,12 +136,12 @@ func NewExporter(logger log.Logger, config *Config) *Exporter {
 		trackStarted: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "usp", "track_started"),
 			"Whether the track has started",
-			[]string{"track_type", "track_src", "track_id"},
+			[]string{"track_type", "track_src", "track_bitrate"},
 			nil),
 		trackDuration: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "usp", "track_duration"),
 			"The duration of the track",
-			[]string{"track_type", "track_src", "track_id"},
+			[]string{"track_type", "track_src", "track_bitrate"},
 			nil),
 		channelStarted: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "usp", "channel_started"),
