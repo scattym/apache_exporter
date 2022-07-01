@@ -1,12 +1,22 @@
-ARG ARCH="amd64"
-ARG OS="linux"
-FROM quay.io/prometheus/busybox-${OS}-${ARCH}:latest
-LABEL maintainer="https://github.com/Lusitaniae, https://github.com/roidelapluie"
+# Dockerfile for creating a statically-linked golang application using docker's
+# multi-stage build feature.
+FROM golang:1.18.2-bullseye AS build
 
-ARG ARCH="amd64"
-ARG OS="linux"
-COPY .build/${OS}-${ARCH}/apache_exporter /bin/apache_exporter
+ARG http_proxy
+ARG https_proxy
 
-EXPOSE      9117
-USER        nobody
-ENTRYPOINT  [ "/bin/apache_exporter" ]
+ENV GO111MODULE=on
+
+#WORKDIR /usr/src
+WORKDIR /usr/local/go/src/
+# Copy the source and build the application.
+COPY . ./
+RUN make
+
+# Copy the statically-linked binary into a scratch container.
+FROM scratch
+COPY --from=build /usr/local/go/src/apache_exporter .
+ENV GOMAXPROCS=1
+USER 1000
+EXPOSE 5000
+ENTRYPOINT ["/apache_exporter"]

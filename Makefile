@@ -1,28 +1,13 @@
-# Copyright 2015 The Prometheus Authors
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+VERSION := $(shell git describe --tags --dirty)
+BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 
-# Needs to be defined before including Makefile.common to auto-generate targets
-DOCKER_ARCHS ?= amd64 armv7 arm64 ppc64le s390x
-DOCKER_IMAGE_NAME ?= apache-exporter
+GO_LD_FLAGS += -X main.Version=$(VERSION)
+GO_LD_FLAGS += -X main.BuildTime=$(BUILD_TIME)
+GO_FLAGS = -ldflags "$(GO_LD_FLAGS)"
 
-all:: vet checkmetrics common-all
+build:
+	CGO_ENABLED=0 GOOS=linux go mod download
+	CGO_ENABLED=0 GOOS=linux go build $(GO_FLAGS) apache_exporter.go
 
-include Makefile.common
-
-PROMTOOL_DOCKER_IMAGE ?= $(shell docker pull -q quay.io/prometheus/prometheus:latest || echo quay.io/prometheus/prometheus:latest)
-PROMTOOL ?= docker run -i --rm -w "$(PWD)" -v "$(PWD):$(PWD)" --entrypoint promtool $(PROMTOOL_DOCKER_IMAGE)
-
-.PHONY: checkmetrics
-checkmetrics:
-	@echo ">> checking metrics for correctness"
-	for file in test/*.metrics; do $(PROMTOOL) check metrics < $$file || exit 1; done
+run: build
+	./apache_exporter
