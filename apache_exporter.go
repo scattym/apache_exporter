@@ -34,7 +34,8 @@ var (
 	insecure         = kingpin.Flag("insecure", "Ignore server certificate if using https.").Bool()
 	configFile       = kingpin.Flag("web.config", "Path to config yaml file that can enable TLS or authentication.").Default("").String()
 	uspScrapeURI     = kingpin.Flag("usp_scrape_uri", "URI to usp statistics page.").Default("http://localhost/channel001/channel001.isml/statistics").String()
-	gracefulStop     = make(chan os.Signal)
+	// uspScrapeURI = kingpin.Flag("usp_scrape_uri", "URI to usp statistics page.").Default("http://localhost/example_statistics.xml").String()
+	gracefulStop = make(chan os.Signal)
 )
 
 func main() {
