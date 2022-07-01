@@ -68,6 +68,7 @@ func main() {
 	level.Info(logger).Log("msg", "Build context", "build", version.BuildContext())
 	level.Info(logger).Log("msg", "Starting Server: ", "listen_address", *listeningAddress)
 	level.Info(logger).Log("msg", "Collect from: ", "scrape_uri", *scrapeURI)
+	level.Info(logger).Log("msg", "Collect usp stats from: ", "usp_scrape_uri", *uspScrapeURI)
 
 	// listener for the termination signals from the OS
 	go func() {
