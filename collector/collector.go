@@ -58,7 +58,9 @@ type Exporter struct {
 	lastUpdated           *prometheus.Desc
 	channelStarted        *prometheus.Desc
 	trackLastUpdated      *prometheus.Desc
+	trackTimeDelta        *prometheus.Desc
 	trackDuration         *prometheus.Desc
+	trackDurationDelta    *prometheus.Desc
 	trackStarted          *prometheus.Desc
 
 	logger log.Logger
@@ -138,9 +140,19 @@ func NewExporter(logger log.Logger, config *Config) *Exporter {
 			"Whether the track has started",
 			[]string{"track_type", "track_src", "track_bitrate"},
 			nil),
+		trackTimeDelta: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "usp", "track_time_delta"),
+			"The age of the video in the track. The bigger the number the further behind live the track is.",
+			[]string{"track_type", "track_src", "track_bitrate"},
+			nil),
 		trackDuration: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "usp", "track_duration"),
 			"The duration of the track",
+			[]string{"track_type", "track_src", "track_bitrate"},
+			nil),
+		trackDurationDelta: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "usp", "track_duration_delta"),
+			"The track duration delta. The bigger the number the further behind live the track is.",
 			[]string{"track_type", "track_src", "track_bitrate"},
 			nil),
 		channelStarted: prometheus.NewDesc(
@@ -246,8 +258,10 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.lastUpdated
 	ch <- e.channelStarted
 	ch <- e.trackStarted
+	ch <- e.trackTimeDelta
 	ch <- e.trackLastUpdated
 	ch <- e.trackDuration
+	ch <- e.trackDurationDelta
 	ch <- e.durationTotal
 	ch <- e.cpuTotal
 	e.cpuload.Describe(ch)
@@ -688,6 +702,9 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 				}
 			}
 		}
+		now := time.Now()
+		currentTimeSeconds := now.Unix()
+		currentTimeNano := now.UnixNano() / 100
 		for _, streamItem := range smil.Body.AudioList {
 			for _, paramItem := range streamItem.ParamList {
 				if paramItem.Name == "updated" {
@@ -697,6 +714,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 						ch <- prometheus.MustNewConstMetric(e.trackLastUpdated, prometheus.CounterValue, 0, "audio", streamItem.Src, streamItem.SystemBitrate)
 					} else {
 						ch <- prometheus.MustNewConstMetric(e.trackLastUpdated, prometheus.CounterValue, float64(timeT.Unix()), "audio", streamItem.Src, streamItem.SystemBitrate)
+						ch <- prometheus.MustNewConstMetric(e.trackTimeDelta, prometheus.CounterValue, float64(currentTimeSeconds-timeT.Unix()), "audio", streamItem.Src, streamItem.SystemBitrate)
 					}
 				}
 				if paramItem.Name == "state" {
@@ -709,6 +727,9 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 				if paramItem.Name == "duration" {
 					if duration, err := strconv.ParseFloat(paramItem.Value, 64); err == nil {
 						ch <- prometheus.MustNewConstMetric(e.trackDuration, prometheus.CounterValue, duration, "audio", streamItem.Src, streamItem.SystemBitrate)
+						ch <- prometheus.MustNewConstMetric(e.trackDurationDelta, prometheus.CounterValue, float64(currentTimeNano)-duration, "audio", streamItem.Src, streamItem.SystemBitrate)
+						level.Error(e.logger).Log("msg", "Unable parse duration:", "err", err, "date", currentTimeNano, "duration", duration)
+
 					} else {
 						level.Error(e.logger).Log("msg", "Unable parse duration:", "err", err, "date", paramItem.Value)
 					}
@@ -724,6 +745,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 						ch <- prometheus.MustNewConstMetric(e.trackLastUpdated, prometheus.CounterValue, 0, "video", streamItem.Src, streamItem.SystemBitrate)
 					} else {
 						ch <- prometheus.MustNewConstMetric(e.trackLastUpdated, prometheus.CounterValue, float64(timeT.Unix()), "video", streamItem.Src, streamItem.SystemBitrate)
+						ch <- prometheus.MustNewConstMetric(e.trackTimeDelta, prometheus.CounterValue, float64(currentTimeSeconds-timeT.Unix()), "video", streamItem.Src, streamItem.SystemBitrate)
 					}
 				}
 				if paramItem.Name == "state" {
@@ -736,6 +758,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 				if paramItem.Name == "duration" {
 					if duration, err := strconv.ParseFloat(paramItem.Value, 64); err == nil {
 						ch <- prometheus.MustNewConstMetric(e.trackDuration, prometheus.CounterValue, duration, "video", streamItem.Src, streamItem.SystemBitrate)
+						ch <- prometheus.MustNewConstMetric(e.trackDurationDelta, prometheus.CounterValue, float64(currentTimeNano)-duration, "video", streamItem.Src, streamItem.SystemBitrate)
 					} else {
 						level.Error(e.logger).Log("msg", "Unable parse duration:", "err", err, "date", paramItem.Value)
 					}
@@ -751,6 +774,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 						ch <- prometheus.MustNewConstMetric(e.trackLastUpdated, prometheus.CounterValue, 0, "textstream", streamItem.Src, streamItem.SystemBitrate)
 					} else {
 						ch <- prometheus.MustNewConstMetric(e.trackLastUpdated, prometheus.CounterValue, float64(timeT.Unix()), "textstream", streamItem.Src, streamItem.SystemBitrate)
+						ch <- prometheus.MustNewConstMetric(e.trackTimeDelta, prometheus.CounterValue, float64(currentTimeSeconds-timeT.Unix()), "textstream", streamItem.Src, streamItem.SystemBitrate)
 					}
 				}
 				if paramItem.Name == "state" {
@@ -763,6 +787,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 				if paramItem.Name == "duration" {
 					if duration, err := strconv.ParseFloat(paramItem.Value, 64); err == nil {
 						ch <- prometheus.MustNewConstMetric(e.trackDuration, prometheus.CounterValue, duration, "textstream", streamItem.Src, streamItem.SystemBitrate)
+						ch <- prometheus.MustNewConstMetric(e.trackDurationDelta, prometheus.CounterValue, float64(currentTimeNano)-duration, "textstream", streamItem.Src, streamItem.SystemBitrate)
 					} else {
 						level.Error(e.logger).Log("msg", "Unable parse duration:", "err", err, "date", paramItem.Value)
 					}
@@ -778,6 +803,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 						ch <- prometheus.MustNewConstMetric(e.trackLastUpdated, prometheus.CounterValue, 0, "meta", streamItem.Src, streamItem.SystemBitrate)
 					} else {
 						ch <- prometheus.MustNewConstMetric(e.trackLastUpdated, prometheus.CounterValue, float64(timeT.Unix()), "meta", streamItem.Src, streamItem.SystemBitrate)
+						ch <- prometheus.MustNewConstMetric(e.trackTimeDelta, prometheus.CounterValue, float64(currentTimeSeconds-timeT.Unix()), "meta", streamItem.Src, streamItem.SystemBitrate)
 					}
 				}
 				if paramItem.Name == "state" {
@@ -790,6 +816,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 				if paramItem.Name == "duration" {
 					if duration, err := strconv.ParseFloat(paramItem.Value, 64); err == nil {
 						ch <- prometheus.MustNewConstMetric(e.trackDuration, prometheus.CounterValue, duration, "meta", streamItem.Src, streamItem.SystemBitrate)
+						ch <- prometheus.MustNewConstMetric(e.trackDurationDelta, prometheus.CounterValue, float64(currentTimeNano)-duration, "meta", streamItem.Src, streamItem.SystemBitrate)
 					} else {
 						level.Error(e.logger).Log("msg", "Unable parse duration:", "err", err, "date", paramItem.Value)
 					}
