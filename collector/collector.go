@@ -728,8 +728,6 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 					if duration, err := strconv.ParseFloat(paramItem.Value, 64); err == nil {
 						ch <- prometheus.MustNewConstMetric(e.trackDuration, prometheus.CounterValue, duration, "audio", streamItem.Src, streamItem.SystemBitrate)
 						ch <- prometheus.MustNewConstMetric(e.trackDurationDelta, prometheus.CounterValue, float64(currentTimeNano)-duration, "audio", streamItem.Src, streamItem.SystemBitrate)
-						level.Error(e.logger).Log("msg", "Unable parse duration:", "err", err, "date", currentTimeNano, "duration", duration)
-
 					} else {
 						level.Error(e.logger).Log("msg", "Unable parse duration:", "err", err, "date", paramItem.Value)
 					}
