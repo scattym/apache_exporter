@@ -30,6 +30,7 @@ const (
 type Exporter struct {
 	URI          string
 	UspScrapeURI string
+	UspOnlineURI string
 	hostOverride string
 	mutex        sync.Mutex
 	client       *http.Client
@@ -57,6 +58,7 @@ type Exporter struct {
 	proxyBalancerRespSize *prometheus.Desc
 	lastUpdated           *prometheus.Desc
 	channelStarted        *prometheus.Desc
+	channelOnline         *prometheus.Desc
 	trackLastUpdated      *prometheus.Desc
 	trackTimeDelta        *prometheus.Desc
 	trackDuration         *prometheus.Desc
@@ -69,6 +71,7 @@ type Exporter struct {
 type Config struct {
 	ScrapeURI    string
 	UspScrapeURI string
+	UspOnlineURI string
 	HostOverride string
 	Insecure     bool
 }
@@ -77,6 +80,7 @@ func NewExporter(logger log.Logger, config *Config) *Exporter {
 	return &Exporter{
 		URI:          config.ScrapeURI,
 		UspScrapeURI: config.UspScrapeURI,
+		UspOnlineURI: config.UspOnlineURI,
 		hostOverride: config.HostOverride,
 		logger:       logger,
 		up: prometheus.NewDesc(
@@ -154,6 +158,11 @@ func NewExporter(logger log.Logger, config *Config) *Exporter {
 			prometheus.BuildFQName(namespace, "usp", "track_duration_delta"),
 			"The track duration delta. The bigger the number the further behind live the track is.",
 			[]string{"track_type", "track_src", "track_bitrate"},
+			nil),
+		channelOnline: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "usp", "channel_online"),
+			"Online state of the channel. 1 means online.",
+			nil,
 			nil),
 		channelStarted: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "usp", "channel_started"),
@@ -256,6 +265,7 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.accessesTotal
 	ch <- e.kBytesTotal
 	ch <- e.lastUpdated
+	ch <- e.channelOnline
 	ch <- e.channelStarted
 	ch <- e.trackStarted
 	ch <- e.trackTimeDelta
@@ -820,6 +830,25 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 					}
 				}
 			}
+		}
+	}
+	{
+		req, err := http.NewRequest("GET", e.UspOnlineURI, nil)
+		if e.hostOverride != "" {
+			req.Host = e.hostOverride
+		}
+		if err != nil {
+			return fmt.Errorf("error building scraping request: %v", err)
+		}
+		resp, err := e.client.Do(req)
+		if err != nil {
+			return fmt.Errorf("error scraping apache: %v", err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			ch <- prometheus.MustNewConstMetric(e.channelOnline, prometheus.GaugeValue, 1)
+		} else {
+			ch <- prometheus.MustNewConstMetric(e.channelOnline, prometheus.GaugeValue, 0)
 		}
 	}
 

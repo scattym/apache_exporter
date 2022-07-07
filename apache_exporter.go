@@ -34,6 +34,7 @@ var (
 	insecure         = kingpin.Flag("insecure", "Ignore server certificate if using https.").Bool()
 	configFile       = kingpin.Flag("web.config", "Path to config yaml file that can enable TLS or authentication.").Default("").String()
 	uspScrapeURI     = kingpin.Flag("usp_scrape_uri", "URI to usp statistics page.").Default("http://localhost/channel001/channel001.isml/statistics").String()
+	uspOnlineURI     = kingpin.Flag("usp_online_uri", "URI to usp online endpoint.").Default("http://localhost/k.htm").String()
 	// uspScrapeURI = kingpin.Flag("usp_scrape_uri", "URI to usp statistics page.").Default("http://localhost/example_statistics.xml").String()
 	gracefulStop = make(chan os.Signal)
 )
@@ -59,6 +60,7 @@ func main() {
 		HostOverride: *hostOverride,
 		Insecure:     *insecure,
 		UspScrapeURI: *uspScrapeURI,
+		UspOnlineURI: *uspOnlineURI,
 	}
 	exporter := collector.NewExporter(logger, config)
 	prometheus.MustRegister(exporter)
